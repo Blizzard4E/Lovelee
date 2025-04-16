@@ -7,7 +7,7 @@
 					@click="
 						() => {
 							clearUser();
-							navigateTo('/login');
+							navigateTo('/');
 						}
 					"
 				>
@@ -25,7 +25,7 @@
 					alt=""
 				/>
 				<p class="text-primary font-extrabold text-lg">
-					Good {{ getWelcomeWordByTime() }}, {{ user?.username }} !
+					Good {{ getWelcomeWordByTime() }}, {{ user?.username }}!
 				</p>
 			</div>
 		</header>
@@ -280,7 +280,7 @@
 						class="text-light"
 					/>
 				</NuxtLink>
-				<NuxtLink>
+				<NuxtLink to="/social">
 					<Icon
 						name="mingcute:group-3-fill"
 						size="32"

@@ -7,7 +7,7 @@
 					@click="
 						() => {
 							clearUser();
-							navigateTo('/login');
+							navigateTo('/');
 						}
 					"
 				>
@@ -25,7 +25,7 @@
 					alt=""
 				/>
 				<p class="text-primary font-extrabold text-lg">
-					Good {{ getWelcomeWordByTime() }}, {{ user?.username }} !
+					Good {{ getWelcomeWordByTime() }}, {{ user?.username }}!
 				</p>
 			</div>
 		</header>
@@ -103,6 +103,7 @@
 				>
 					Save Quote
 				</button>
+
 				<h1 class="text-2xl font-extrabold text-primary">
 					Saved Quotes
 				</h1>
@@ -157,7 +158,7 @@
 						class="text-light"
 					/>
 				</NuxtLink>
-				<NuxtLink>
+				<NuxtLink to="/social">
 					<Icon
 						name="mingcute:group-3-fill"
 						size="32"
@@ -166,6 +167,26 @@
 				</NuxtLink>
 			</div>
 		</footer>
+
+		<!-- Notification Component -->
+		<div
+			v-if="showNotification"
+			class="fixed top-4 right-4 bg-primary text-white p-4 rounded-lg shadow-lg z-50 max-w-md"
+			style="animation: slideIn 0.3s ease-out"
+		>
+			<div class="flex items-start">
+				<div class="flex-1">
+					<p class="font-bold mb-1">Daily Quote</p>
+					<p>{{ notificationQuote }}</p>
+				</div>
+				<button
+					@click="showNotification = false"
+					class="ml-4 text-white"
+				>
+					<Icon name="mingcute:close-fill" size="20" />
+				</button>
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -174,6 +195,11 @@ const supabase = useSupabaseClient<Quote>();
 const { user, clearUser } = useAuth();
 const isWriting = ref(false);
 const userQuote = ref("");
+const showNotification = ref(false);
+const notificationQuote = ref("");
+const notificationEnabled = ref(true);
+let notificationTimer: any = null;
+
 interface ZenQuote {
 	q: string;
 	a: string;
@@ -194,6 +220,61 @@ const { data: quotes, refresh: refreshQuotes } = useAsyncData(
 		return data;
 	}
 );
+
+// Request notification permission on page load
+onMounted(() => {
+	requestNotificationPermission();
+});
+
+// Function to request notification permission
+const requestNotificationPermission = async () => {
+	if ("Notification" in window) {
+		if (
+			Notification.permission !== "granted" &&
+			Notification.permission !== "denied"
+		) {
+			await Notification.requestPermission();
+		}
+	}
+};
+
+// Function to schedule notification
+const scheduleNotification = () => {
+	// Clear any existing timer
+	if (notificationTimer) {
+		clearTimeout(notificationTimer);
+	}
+
+	// Always schedule in the background
+	if (quoteData.value && quoteData.value[0]) {
+		notificationQuote.value = quoteData.value[0].q;
+
+		// Schedule notification after 10 seconds (for testing)
+		notificationTimer = setTimeout(() => {
+			showQuoteNotification();
+		}, 10000); // 10 seconds
+	}
+};
+
+// Function to show notification
+const showQuoteNotification = () => {
+	// Browser notification if permission is granted
+	if ("Notification" in window && Notification.permission === "granted") {
+		new Notification("Daily Quote", {
+			body: notificationQuote.value,
+			icon: "/favicon.ico", // Replace with your app icon
+		});
+	}
+
+	// In-app notification
+	showNotification.value = true;
+
+	// Auto-hide after 5 seconds
+	setTimeout(() => {
+		showNotification.value = false;
+	}, 5000);
+};
+
 const handleCreateQuote = async () => {
 	if (!user.value) return;
 
@@ -222,6 +303,36 @@ const handleCreateQuote = async () => {
 		refreshQuotes();
 	}
 };
+
+// Auto-schedule notifications when quote data is available
+onMounted(() => {
+	requestNotificationPermission();
+	if (quoteData.value && quoteData.value[0]) {
+		scheduleNotification();
+	}
+});
+
+// Watch for changes to quote data
+watch(
+	() => quoteData.value,
+	() => {
+		if (notificationEnabled.value) {
+			scheduleNotification();
+		}
+	},
+	{ deep: true }
+);
 </script>
 
-<style></style>
+<style>
+@keyframes slideIn {
+	from {
+		transform: translateX(100%);
+		opacity: 0;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+</style>

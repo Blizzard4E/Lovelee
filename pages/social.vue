@@ -30,25 +30,27 @@
 			</div>
 		</header>
 		<div class="overflow-auto flex flex-col gap-4">
-			<div class="px-4 grid gap-4 mb-32">
-				<div class="flex justify-between">
-					<h1 class="text-2xl font-extrabold text-primary">Chats</h1>
+			<div class="px-4 mb-32">
+				<form @submit.prevent="createPost" class="w-full flex gap-2">
+					<input
+						type="text"
+						class="rounded-2xl p-4 border-secondary border-2 w-full bg-background text-primary placeholder:text-primary/80 font-bold"
+						placeholder="Whats on your mind today?"
+						v-model="postContent"
+					/>
 					<button
-						class="text-primary text-3xl font-bold"
-						@click="createNewChat"
+						class="hover:scale-110 transition-all active:scale-125"
+						type="submit"
 					>
-						+
+						<Icon
+							name="mingcute:send-plane-fill"
+							size="32"
+							class="text-primary"
+						/>
 					</button>
-				</div>
-				<div class="grid gap-4 w-full">
-					<NuxtLink
-						v-for="chat in chatHistory"
-						:key="chat.id"
-						:to="`/chat/${chat.id}`"
-						class="p-4 rounded-2xl bg-light text-primary font-bold"
-					>
-						{{ chat.conversation[0]?.content || "Untitled Chat" }}
-					</NuxtLink>
+				</form>
+				<div class="grid gap-6 mt-4">
+					<Post v-for="post in posts" :key="post.id" :post="post" />
 				</div>
 			</div>
 		</div>
@@ -75,14 +77,14 @@
 					<Icon
 						name="mingcute:android-2-fill"
 						size="32"
-						class="text-white"
+						class="text-light"
 					/>
 				</NuxtLink>
 				<NuxtLink to="/social">
 					<Icon
 						name="mingcute:group-3-fill"
 						size="32"
-						class="text-light"
+						class="text-white"
 					/>
 				</NuxtLink>
 			</div>
@@ -91,29 +93,48 @@
 </template>
 
 <script lang="ts" setup>
-const supabase = useSupabaseClient<Chat>();
+const supabase = useSupabaseClient<Post>();
 const { user, clearUser } = useAuth();
+const postContent = ref("");
+if (!user.value) {
+	// Redirect to login if user is not authenticated
+	navigateTo("/");
+}
+const { data: posts, refresh } = useAsyncData("my-data", async () => {
+	const { data, error } = await supabase
+		.from("post")
+		.select("id, content, user_id, created_at, user:user_id(id, username)")
+		.order("created_at", { ascending: false });
 
-const createNewChat = async () => {
+	// Transform the data to convert user arrays to single objects
+	if (data) {
+		return data.map((post) => ({
+			...post,
+			user: Array.isArray(post.user) ? post.user[0] : post.user,
+		}));
+	}
+
+	return [];
+});
+
+const createPost = async () => {
 	if (!user.value) return;
 	const { data, error } = await supabase
-		.from("chat")
-		.insert({ user_id: user.value.id, conversation: [] })
-		.select()
+		.from("post")
+		.insert({
+			content: postContent.value,
+			user_id: user.value.id,
+		})
+		.select("id, content, user_id")
 		.single();
 
 	if (error) {
-		console.error("Error creating new chat:", error);
+		console.error("Error creating quote:", error);
 	} else {
-		console.log("New chat created:", data);
-		navigateTo(`/chat/${data.id}`);
+		postContent.value = "";
+		refresh();
 	}
 };
-
-const { data: chatHistory, error } = await supabase
-	.from("chat")
-	.select("id, conversation")
-	.eq("user_id", user.value?.id)
-	.order("created_at", { ascending: false });
 </script>
+
 <style></style>

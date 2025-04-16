@@ -32,3 +32,25 @@ export type Conversation = {
 	role: string;
 	content: string;
 };
+export type Post = {
+	id: number;
+	content: string;
+	user: {
+		id: number;
+		username: string;
+	};
+	created_at: Date;
+};
+export type Reply = {
+	id: number;
+	content: string;
+	user_id: number;
+	post_id: number;
+	created_at: Date;
+};
+export type Like = {
+	id: number;
+	user_id: number;
+	post_id: number;
+	created_at: Date;
+};
