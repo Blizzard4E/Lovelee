@@ -147,10 +147,18 @@ const createBotMessage = async (botResponse: string) => {
 };
 
 const sendToBot = async (newMessage: Conversation) => {
-	if (!user.value) return;
-	if (!chat.value) return;
+	if (!user.value || !chat.value) return;
 	console.log("Sending to bot");
+
 	try {
+		// Analyze message content to determine appropriate response type
+		const userMessageContent = newMessage.content;
+		const conversationHistory = chat.value.conversation;
+		const responseType = determineResponseType(
+			userMessageContent,
+			conversationHistory
+		);
+
 		const response = await fetch(
 			"https://api.openai.com/v1/chat/completions",
 			{
@@ -161,19 +169,28 @@ const sendToBot = async (newMessage: Conversation) => {
 				},
 				body: JSON.stringify({
 					model: "gpt-4o-mini",
-					messages: [...chat.value.conversation, newMessage], // Send entire history
+					messages: [
+						// Include system message to guide the AI's behavior
+						{
+							role: "system",
+							content: `You are a supportive mental wellness companion. Your primary goal is to listen and understand. 
+                            Focus on empathetic responses that validate the user's feelings. 
+                            Wait for clear indicators that the user is seeking advice before offering solutions.
+                            Response type for this message: ${responseType}`,
+						},
+						...chat.value.conversation,
+						newMessage,
+					],
 				}),
 			}
 		);
+
 		const data = await response.json();
 		if (data.choices && data.choices.length > 0) {
 			const assistantResponse = data.choices[0].message.content;
 			createBotMessage(assistantResponse);
-
 			console.log("Response from GPT:", assistantResponse);
-
-			// Save to database (implementation below)
-			//saveConversationToSupabase();
+			// saveConversationToSupabase();
 		} else {
 			console.error("Unexpected API response format:", data);
 		}
@@ -182,6 +199,79 @@ const sendToBot = async (newMessage: Conversation) => {
 	} finally {
 		isLoading.value = false;
 	}
+};
+
+/**
+ * Determines what type of response the bot should provide based on
+ * user message content and conversation context
+ */
+const determineResponseType = (
+	messageContent: string,
+	conversationHistory: Array<{ role: string; content: string }>
+) => {
+	// Default to "listening mode" for new conversations or when we're unsure
+	if (!conversationHistory || conversationHistory.length < 3) {
+		return "LISTENING_MODE";
+	}
+
+	// Check if the user is explicitly asking for help or advice
+	const helpPhrases = [
+		"help me",
+		"what should i do",
+		"any advice",
+		"can you suggest",
+		"how can i",
+		"what do you think",
+		"solve this",
+	];
+
+	const isAskingForHelp = helpPhrases.some((phrase) =>
+		messageContent.toLowerCase().includes(phrase)
+	);
+
+	if (isAskingForHelp) {
+		return "ADVICE_MODE";
+	}
+
+	// Check if this is a follow-up to an ongoing support conversation
+	const recentMessages = conversationHistory.slice(-4);
+	const botWasAdvisingPreviously = recentMessages.some(
+		(msg) =>
+			msg.role === "assistant" &&
+			(msg.content.includes("suggestion") ||
+				msg.content.includes("recommend") ||
+				msg.content.includes("try to"))
+	);
+
+	if (botWasAdvisingPreviously && messageContent.length > 15) {
+		// User is responding to previous advice with substance
+		return "FOLLOW_UP_MODE";
+	}
+
+	// Analysis of emotional content
+	const emotionalWords = [
+		"sad",
+		"happy",
+		"angry",
+		"frustrated",
+		"anxious",
+		"depressed",
+		"worried",
+		"scared",
+		"lonely",
+		"overwhelmed",
+	];
+
+	const hasEmotionalContent = emotionalWords.some((word) =>
+		messageContent.toLowerCase().includes(word)
+	);
+
+	if (hasEmotionalContent) {
+		return "EMOTIONAL_SUPPORT_MODE";
+	}
+
+	// Default to listening when unsure
+	return "LISTENING_MODE";
 };
 </script>
 
